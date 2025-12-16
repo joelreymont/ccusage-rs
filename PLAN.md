@@ -76,6 +76,7 @@
 
 ## Repo Tasks (initial)
 - [x] Initialize cargo binary crate and git repo.
+- [x] Add pricing + log schema stubs and basic aggregations (daily/monthly/sessions).
+- [x] Start config loader (JSON) and CLI flags for breakdown/blocks/statusline.
 - [ ] Add lint/format configs (rustfmt, clippy).
-- [ ] Add pricing + log schema stubs.
-- [ ] Start config loader and sample fixtures.
+- [ ] Add sample fixtures and tests.
