@@ -2218,15 +2218,12 @@ fn print_rows_table(rows: &[Row], totals: &Totals, compact: bool, locale: &Local
 
     let term_width = get_terminal_width();
     // Auto-compact if terminal is narrow
-    let use_compact = compact || term_width < 120;
+    let use_compact = compact || term_width < 140;
     // Limit projects shown based on available width
-    let max_projects = if term_width < 100 { 1 } else if term_width < 140 { 2 } else { 3 };
+    let max_projects = if term_width < 120 { 1 } else if term_width < 160 { 2 } else { 3 };
 
     let mut table = Table::new();
-    table
-        .set_content_arrangement(ContentArrangement::Dynamic)
-        .load_preset(UTF8_FULL)
-        .set_width(term_width);
+    table.load_preset(UTF8_FULL).set_content_arrangement(ContentArrangement::Disabled);
 
     if use_compact {
         table.set_header(vec![
@@ -2310,10 +2307,7 @@ fn print_sessions_table(rows: &[SessionRow], totals: &Totals, locale: &Locale) {
     let use_compact = term_width < 140;
 
     let mut table = Table::new();
-    table
-        .set_content_arrangement(ContentArrangement::Dynamic)
-        .load_preset(UTF8_FULL)
-        .set_width(term_width);
+    table.load_preset(UTF8_FULL).set_content_arrangement(ContentArrangement::Disabled);
 
     if use_compact {
         table.set_header(vec![
@@ -2410,10 +2404,7 @@ fn print_blocks_table(
     let use_compact = compact || term_width < 120;
 
     let mut table = Table::new();
-    table
-        .set_content_arrangement(ContentArrangement::Dynamic)
-        .load_preset(UTF8_FULL)
-        .set_width(term_width);
+    table.load_preset(UTF8_FULL).set_content_arrangement(ContentArrangement::Disabled);
 
     if use_compact {
         table.set_header(vec![
@@ -2502,8 +2493,6 @@ fn print_model_breakdowns(models: &[ModelBreakdown], locale: &Locale) {
         return;
     }
 
-    let term_width = get_terminal_width();
-
     let mut rows = models.to_vec();
     rows.sort_by(|a, b| {
         b.cost_usd
@@ -2511,11 +2500,8 @@ fn print_model_breakdowns(models: &[ModelBreakdown], locale: &Locale) {
             .unwrap_or(Ordering::Equal)
     });
     let mut table = Table::new();
-    table
-        .set_content_arrangement(ContentArrangement::Dynamic)
-        .load_preset(UTF8_FULL)
-        .set_width(term_width)
-        .set_header(vec![
+    table.load_preset(UTF8_FULL).set_content_arrangement(ContentArrangement::Disabled);
+    table.set_header(vec![
             "Model".cyan().bold().to_string(),
             "Input".cyan().bold().to_string(),
             "Output".cyan().bold().to_string(),
