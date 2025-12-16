@@ -2186,7 +2186,7 @@ fn output_statusline(report: StatuslineReport, json: bool) {
     }
     if let Some(day) = report.last_date {
         println!(
-            "{} {} {} {} {} {} {} {} {} {} {} {}",
+            "{} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {}",
             day.cyan().bold(),
             "|".dimmed(),
             "in".dimmed(),
@@ -2194,6 +2194,12 @@ fn output_statusline(report: StatuslineReport, json: bool) {
             "|".dimmed(),
             "out".dimmed(),
             format_tokens_compact(report.totals.output_tokens),
+            "|".dimmed(),
+            "c/w".dimmed(),
+            format_tokens_compact(report.totals.cache_creation_tokens),
+            "|".dimmed(),
+            "c/r".dimmed(),
+            format_tokens_compact(report.totals.cache_read_tokens),
             "|".dimmed(),
             "total".dimmed(),
             format_tokens_compact(report.totals.total_tokens),

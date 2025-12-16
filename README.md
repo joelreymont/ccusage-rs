@@ -1,5 +1,13 @@
 # ccusage-rs
 
+Daily usage with per-model breakdown:
+
+![Daily usage](images/ccusage-daily.png)
+
+Monthly usage summary:
+
+![Monthly usage](images/ccusage-monthly.png)
+
 Rust reimplementation of [ccusage](https://github.com/ryoppippi/ccusage), the Claude Code usage analyzer. The goal is a fast, fully offline CLI that reads local Claude Code JSONL logs, calculates token usage/costs, and presents daily/monthly/session/block reports (plus live monitoring) with JSON or table output.
 
 ## Status
