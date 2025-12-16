@@ -15,7 +15,6 @@ use colored::Colorize;
 use chrono::{DateTime, Datelike, Duration as ChronoDuration, NaiveDate, Timelike, Utc};
 use chrono_tz::Tz;
 use clap::{Args, Parser, Subcommand, ValueEnum};
-use comfy_table::{ContentArrangement, Table, presets::UTF8_FULL};
 use crossterm::{
     ExecutableCommand,
     event::{self, Event, KeyCode, KeyEventKind},
@@ -989,15 +988,11 @@ fn load_pricing(offline: bool) -> Result<HashMap<String, Pricing>> {
 fn fetch_remote_pricing() -> Result<HashMap<String, Pricing>> {
     // LiteLLM pricing dataset
     const URL: &str = "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json";
-    let client = reqwest::blocking::Client::builder()
+    let resp = ureq::get(URL)
         .timeout(std::time::Duration::from_secs(5))
-        .build()
-        .context("building http client")?;
-    let resp = client.get(URL).send().context("fetching remote pricing")?;
-    if !resp.status().is_success() {
-        anyhow::bail!("pricing fetch failed with status {}", resp.status());
-    }
-    let json: serde_json::Value = resp.json().context("parsing pricing json")?;
+        .call()
+        .context("fetching remote pricing")?;
+    let json: serde_json::Value = resp.into_json().context("parsing pricing json")?;
     let mut out = HashMap::new();
     if let Some(obj) = json.as_object() {
         for (key, val) in obj {
@@ -2194,16 +2189,16 @@ fn output_statusline(report: StatuslineReport, json: bool) {
             "{} {} {} {} {} {} {} {} {} {} {} {}",
             day.cyan().bold(),
             "|".dimmed(),
-            "input".dimmed(),
-            format_tokens(report.totals.input_tokens, &Locale::en),
+            "in".dimmed(),
+            format_tokens_compact(report.totals.input_tokens),
             "|".dimmed(),
-            "output".dimmed(),
-            format_tokens(report.totals.output_tokens, &Locale::en),
+            "out".dimmed(),
+            format_tokens_compact(report.totals.output_tokens),
             "|".dimmed(),
             "total".dimmed(),
-            format_tokens(report.totals.total_tokens, &Locale::en),
+            format_tokens_compact(report.totals.total_tokens),
             "|".dimmed(),
-            format!("${:.2}", report.totals.cost_usd).yellow().bold(),
+            format_cost_compact(report.totals.cost_usd).yellow().bold(),
         );
     } else {
         println!("No data");
@@ -2217,56 +2212,38 @@ fn print_rows_table(rows: &[Row], totals: &Totals, compact: bool, locale: &Local
     }
 
     let term_width = get_terminal_width();
-    // Auto-compact if terminal is narrow
     let use_compact = compact || term_width < 140;
-    // Limit projects shown based on available width
     let max_projects = if term_width < 120 { 1 } else if term_width < 160 { 2 } else { 3 };
 
-    let mut table = Table::new();
-    table.load_preset(UTF8_FULL).set_content_arrangement(ContentArrangement::Disabled);
+    println!("{}", format!("{title} usage").bold());
 
     if use_compact {
-        table.set_header(vec![
-            "Period".cyan().bold().to_string(),
-            "Input".cyan().bold().to_string(),
-            "Output".cyan().bold().to_string(),
-            "Total".cyan().bold().to_string(),
-            "Cost".cyan().bold().to_string(),
-            "Projects".cyan().bold().to_string(),
-            "Models".cyan().bold().to_string(),
-        ]);
+        let mut table = SimpleTable::new(vec!["Period", "In", "Out", "Total", "Cost", "Projects", "Models"])
+            .header_style(|s| s.cyan().bold());
         for row in rows {
             table.add_row(vec![
                 row.key.clone(),
-                format_tokens(row.input_tokens, locale),
-                format_tokens(row.output_tokens, locale),
-                format_tokens(row.total_tokens, locale),
-                format_cost(row.cost_usd),
+                format_tokens_compact(row.input_tokens),
+                format_tokens_compact(row.output_tokens),
+                format_tokens_compact(row.total_tokens),
+                format_cost_compact(row.cost_usd),
                 format_projects(&row.projects, max_projects),
                 format_models(&row.models),
             ]);
         }
-        table.add_row(vec![
-            format!("Total").yellow().bold().to_string(),
-            format_tokens(totals.input_tokens, locale).yellow().to_string(),
-            format_tokens(totals.output_tokens, locale).yellow().to_string(),
-            format_tokens(totals.total_tokens, locale).yellow().to_string(),
-            format_cost(totals.cost_usd).yellow().to_string(),
+        table.set_footer(vec![
+            "Total".yellow().bold().to_string(),
+            format_tokens_compact(totals.input_tokens).yellow().to_string(),
+            format_tokens_compact(totals.output_tokens).yellow().to_string(),
+            format_tokens_compact(totals.total_tokens).yellow().to_string(),
+            format_cost_compact(totals.cost_usd).yellow().to_string(),
             String::new(),
             String::new(),
         ]);
+        table.print();
     } else {
-        table.set_header(vec![
-            "Period".cyan().bold().to_string(),
-            "Input".cyan().bold().to_string(),
-            "Output".cyan().bold().to_string(),
-            "Cache Write".cyan().bold().to_string(),
-            "Cache Read".cyan().bold().to_string(),
-            "Total".cyan().bold().to_string(),
-            "Cost".cyan().bold().to_string(),
-            "Projects".cyan().bold().to_string(),
-            "Models".cyan().bold().to_string(),
-        ]);
+        let mut table = SimpleTable::new(vec!["Period", "Input", "Output", "C/W", "C/R", "Total", "Cost", "Projects", "Models"])
+            .header_style(|s| s.cyan().bold());
         for row in rows {
             table.add_row(vec![
                 row.key.clone(),
@@ -2280,8 +2257,8 @@ fn print_rows_table(rows: &[Row], totals: &Totals, compact: bool, locale: &Local
                 format_models(&row.models),
             ]);
         }
-        table.add_row(vec![
-            format!("Total").yellow().bold().to_string(),
+        table.set_footer(vec![
+            "Total".yellow().bold().to_string(),
             format_tokens(totals.input_tokens, locale).yellow().to_string(),
             format_tokens(totals.output_tokens, locale).yellow().to_string(),
             format_tokens(totals.cache_creation_tokens, locale).yellow().to_string(),
@@ -2291,10 +2268,8 @@ fn print_rows_table(rows: &[Row], totals: &Totals, compact: bool, locale: &Local
             String::new(),
             String::new(),
         ]);
+        table.print();
     }
-
-    println!("{}", format!("{title} usage").bold());
-    println!("{table}");
 }
 
 fn print_sessions_table(rows: &[SessionRow], totals: &Totals, locale: &Locale) {
@@ -2306,55 +2281,35 @@ fn print_sessions_table(rows: &[SessionRow], totals: &Totals, locale: &Locale) {
     let term_width = get_terminal_width();
     let use_compact = term_width < 140;
 
-    let mut table = Table::new();
-    table.load_preset(UTF8_FULL).set_content_arrangement(ContentArrangement::Disabled);
+    println!("{}", "Session usage".bold());
 
     if use_compact {
-        table.set_header(vec![
-            "Session".cyan().bold().to_string(),
-            "Project".cyan().bold().to_string(),
-            "Input".cyan().bold().to_string(),
-            "Output".cyan().bold().to_string(),
-            "Total".cyan().bold().to_string(),
-            "Cost".cyan().bold().to_string(),
-            "Models".cyan().bold().to_string(),
-        ]);
-
+        let mut table = SimpleTable::new(vec!["Session", "Project", "In", "Out", "Total", "Cost", "Models"])
+            .header_style(|s| s.cyan().bold());
         for row in rows {
             table.add_row(vec![
                 truncate_str(&row.session_id, 12),
                 shorten_project_name(&row.project),
-                format_tokens(row.input_tokens, locale),
-                format_tokens(row.output_tokens, locale),
-                format_tokens(row.total_tokens, locale),
-                format_cost(row.cost_usd),
+                format_tokens_compact(row.input_tokens),
+                format_tokens_compact(row.output_tokens),
+                format_tokens_compact(row.total_tokens),
+                format_cost_compact(row.cost_usd),
                 format_models(&row.models),
             ]);
         }
-
-        table.add_row(vec![
+        table.set_footer(vec![
             "TOTAL".yellow().bold().to_string(),
             String::new(),
-            format_tokens(totals.input_tokens, locale).yellow().to_string(),
-            format_tokens(totals.output_tokens, locale).yellow().to_string(),
-            format_tokens(totals.total_tokens, locale).yellow().to_string(),
-            format_cost(totals.cost_usd).yellow().to_string(),
+            format_tokens_compact(totals.input_tokens).yellow().to_string(),
+            format_tokens_compact(totals.output_tokens).yellow().to_string(),
+            format_tokens_compact(totals.total_tokens).yellow().to_string(),
+            format_cost_compact(totals.cost_usd).yellow().to_string(),
             String::new(),
         ]);
+        table.print();
     } else {
-        table.set_header(vec![
-            "Session".cyan().bold().to_string(),
-            "Project".cyan().bold().to_string(),
-            "Last Activity".cyan().bold().to_string(),
-            "Input".cyan().bold().to_string(),
-            "Output".cyan().bold().to_string(),
-            "Cache Write".cyan().bold().to_string(),
-            "Cache Read".cyan().bold().to_string(),
-            "Total".cyan().bold().to_string(),
-            "Cost".cyan().bold().to_string(),
-            "Models".cyan().bold().to_string(),
-        ]);
-
+        let mut table = SimpleTable::new(vec!["Session", "Project", "Last Activity", "Input", "Output", "C/W", "C/R", "Total", "Cost", "Models"])
+            .header_style(|s| s.cyan().bold());
         for row in rows {
             table.add_row(vec![
                 truncate_str(&row.session_id, 16),
@@ -2369,8 +2324,7 @@ fn print_sessions_table(rows: &[SessionRow], totals: &Totals, locale: &Locale) {
                 format_models(&row.models),
             ]);
         }
-
-        table.add_row(vec![
+        table.set_footer(vec![
             "TOTAL".yellow().bold().to_string(),
             String::new(),
             String::new(),
@@ -2382,10 +2336,8 @@ fn print_sessions_table(rows: &[SessionRow], totals: &Totals, locale: &Locale) {
             format_cost(totals.cost_usd).yellow().to_string(),
             String::new(),
         ]);
+        table.print();
     }
-
-    println!("{}", "Session usage".bold());
-    println!("{table}");
 }
 
 fn print_blocks_table(
@@ -2403,48 +2355,31 @@ fn print_blocks_table(
     let term_width = get_terminal_width();
     let use_compact = compact || term_width < 120;
 
-    let mut table = Table::new();
-    table.load_preset(UTF8_FULL).set_content_arrangement(ContentArrangement::Disabled);
+    println!("{}", "Blocks usage".bold());
 
     if use_compact {
-        table.set_header(vec![
-            "Block Start".cyan().bold().to_string(),
-            "Total".cyan().bold().to_string(),
-            "% Limit".cyan().bold().to_string(),
-            "Cost (USD)".cyan().bold().to_string(),
-            "Models".cyan().bold().to_string(),
-        ]);
+        let mut table = SimpleTable::new(vec!["Block", "Total", "%Lim", "Cost", "Models"])
+            .header_style(|s| s.cyan().bold());
         for row in rows {
             table.add_row(vec![
                 row.block_start.clone(),
-                format_tokens(row.total_tokens, locale),
-                row.percent_of_limit
-                    .map(|p| format!("{:.1}%", p))
-                    .unwrap_or_else(|| "-".to_string()),
-                format_cost(row.cost_usd),
+                format_tokens_compact(row.total_tokens),
+                row.percent_of_limit.map(|p| format!("{:.0}%", p)).unwrap_or_else(|| "-".into()),
+                format_cost_compact(row.cost_usd),
                 format_models(&row.models),
             ]);
         }
-        table.add_row(vec![
+        table.set_footer(vec![
             "TOTAL".yellow().bold().to_string(),
-            format_tokens(totals.total_tokens, locale).yellow().to_string(),
+            format_tokens_compact(totals.total_tokens).yellow().to_string(),
             String::new(),
-            format_cost(totals.cost_usd).yellow().to_string(),
+            format_cost_compact(totals.cost_usd).yellow().to_string(),
             String::new(),
         ]);
+        table.print();
     } else {
-        table.set_header(vec![
-            "Block Start".cyan().bold().to_string(),
-            "Block End".cyan().bold().to_string(),
-            "Input".cyan().bold().to_string(),
-            "Output".cyan().bold().to_string(),
-            "Cache Create".cyan().bold().to_string(),
-            "Cache Read".cyan().bold().to_string(),
-            "Total".cyan().bold().to_string(),
-            "% Limit".cyan().bold().to_string(),
-            "Cost (USD)".cyan().bold().to_string(),
-            "Models".cyan().bold().to_string(),
-        ]);
+        let mut table = SimpleTable::new(vec!["Block Start", "Block End", "Input", "Output", "C/W", "C/R", "Total", "%Lim", "Cost", "Models"])
+            .header_style(|s| s.cyan().bold());
         for row in rows {
             table.add_row(vec![
                 row.block_start.clone(),
@@ -2454,14 +2389,15 @@ fn print_blocks_table(
                 format_tokens(row.cache_creation_tokens, locale),
                 format_tokens(row.cache_read_tokens, locale),
                 format_tokens(row.total_tokens, locale),
-                row.percent_of_limit
-                    .map(|p| format!("{:.1}%", p))
-                    .unwrap_or_else(|| "-".to_string()),
+                row.percent_of_limit.map(|p| format!("{:.1}%", p)).unwrap_or_else(|| "-".into()),
                 format_cost(row.cost_usd),
                 format_models(&row.models),
             ]);
         }
-        table.add_row(vec![
+        let total_pct = token_limit
+            .map(|l| format!("{:.1}%", (totals.total_tokens as f64 / l as f64) * 100.0))
+            .unwrap_or_else(|| "-".into());
+        table.set_footer(vec![
             "TOTAL".yellow().bold().to_string(),
             String::new(),
             format_tokens(totals.input_tokens, locale).yellow().to_string(),
@@ -2469,23 +2405,12 @@ fn print_blocks_table(
             format_tokens(totals.cache_creation_tokens, locale).yellow().to_string(),
             format_tokens(totals.cache_read_tokens, locale).yellow().to_string(),
             format_tokens(totals.total_tokens, locale).yellow().to_string(),
-            token_limit
-                .map(|limit| {
-                    format!(
-                        "{:.1}%",
-                        (totals.total_tokens as f64 / limit as f64) * 100.0
-                    )
-                })
-                .unwrap_or_else(|| "-".to_string())
-                .yellow()
-                .to_string(),
+            total_pct.yellow().to_string(),
             format_cost(totals.cost_usd).yellow().to_string(),
             String::new(),
         ]);
+        table.print();
     }
-
-    println!("{}", "Blocks usage".bold());
-    println!("{table}");
 }
 
 fn print_model_breakdowns(models: &[ModelBreakdown], locale: &Locale) {
@@ -2493,24 +2418,17 @@ fn print_model_breakdowns(models: &[ModelBreakdown], locale: &Locale) {
         return;
     }
 
-    let mut rows = models.to_vec();
-    rows.sort_by(|a, b| {
+    let mut sorted = models.to_vec();
+    sorted.sort_by(|a, b| {
         b.cost_usd
             .partial_cmp(&a.cost_usd)
             .unwrap_or(Ordering::Equal)
     });
-    let mut table = Table::new();
-    table.load_preset(UTF8_FULL).set_content_arrangement(ContentArrangement::Disabled);
-    table.set_header(vec![
-            "Model".cyan().bold().to_string(),
-            "Input".cyan().bold().to_string(),
-            "Output".cyan().bold().to_string(),
-            "Cache Write".cyan().bold().to_string(),
-            "Cache Read".cyan().bold().to_string(),
-            "Total".cyan().bold().to_string(),
-            "Cost".cyan().bold().to_string(),
-        ]);
-    for row in rows {
+
+    println!("\n{}", "Model breakdowns".bold());
+    let mut table = SimpleTable::new(vec!["Model", "Input", "Output", "C/W", "C/R", "Total", "Cost"])
+        .header_style(|s| s.cyan().bold());
+    for row in sorted {
         table.add_row(vec![
             format_model_name(&row.model).dimmed().to_string(),
             format_tokens(row.input_tokens, locale).dimmed().to_string(),
@@ -2521,16 +2439,39 @@ fn print_model_breakdowns(models: &[ModelBreakdown], locale: &Locale) {
             format_cost(row.cost_usd).dimmed().to_string(),
         ]);
     }
-    println!("\n{}", "Model breakdowns".bold());
-    println!("{table}");
+    table.print();
 }
 
 fn format_tokens(value: u64, locale: &Locale) -> String {
     value.to_formatted_string(locale)
 }
 
+fn format_tokens_compact(value: u64) -> String {
+    if value >= 1_000_000_000 {
+        format!("{:.1}B", value as f64 / 1_000_000_000.0)
+    } else if value >= 1_000_000 {
+        format!("{:.1}M", value as f64 / 1_000_000.0)
+    } else if value >= 1_000 {
+        format!("{:.1}K", value as f64 / 1_000.0)
+    } else {
+        value.to_string()
+    }
+}
+
 fn format_cost(value: f64) -> String {
-    format!("{:.4}", value)
+    let int_part = value.trunc() as u64;
+    let frac_part = ((value.fract() * 100.0).round() as u64) % 100;
+    format!("${}.{:02}", int_part.to_formatted_string(&Locale::en), frac_part)
+}
+
+fn format_cost_compact(value: f64) -> String {
+    if value >= 1_000_000.0 {
+        format!("${:.1}M", value / 1_000_000.0)
+    } else if value >= 1_000.0 {
+        format!("${:.0}K", value / 1_000.0)
+    } else {
+        format!("${:.0}", value)
+    }
 }
 
 fn join_set(set: &BTreeSet<String>) -> String {
@@ -2556,13 +2497,14 @@ fn format_model_name(model: &str) -> String {
 }
 
 fn format_models(set: &BTreeSet<String>) -> String {
-    if set.is_empty() {
+    let models: Vec<_> = set.iter()
+        .filter(|m| *m != "<synthetic>")
+        .map(|m| format_model_name(m))
+        .collect();
+    if models.is_empty() {
         return "-".into();
     }
-    set.iter()
-        .map(|m| format_model_name(m))
-        .collect::<Vec<_>>()
-        .join(", ")
+    models.join(", ")
 }
 
 /// Get terminal width, defaulting to 120 if unavailable
@@ -2610,6 +2552,147 @@ fn format_projects(set: &BTreeSet<String>, max_display: usize) -> String {
         let displayed: Vec<_> = shortened.iter().take(max_display).cloned().collect();
         format!("{}, +{} more", displayed.join(", "), shortened.len() - max_display)
     }
+}
+
+/// Simple table with box-drawing characters
+struct SimpleTable {
+    headers: Vec<String>,
+    rows: Vec<Vec<String>>,
+    header_style: Option<fn(&str) -> colored::ColoredString>,
+    footer: Option<Vec<String>>,
+}
+
+impl SimpleTable {
+    fn new(headers: Vec<&str>) -> Self {
+        Self {
+            headers: headers.into_iter().map(String::from).collect(),
+            rows: Vec::new(),
+            header_style: None,
+            footer: None,
+        }
+    }
+
+    fn header_style(mut self, f: fn(&str) -> colored::ColoredString) -> Self {
+        self.header_style = Some(f);
+        self
+    }
+
+    fn add_row(&mut self, row: Vec<String>) {
+        self.rows.push(row);
+    }
+
+    fn set_footer(&mut self, footer: Vec<String>) {
+        self.footer = Some(footer);
+    }
+
+    fn print(&self) {
+        let num_cols = self.headers.len();
+        let mut widths: Vec<usize> = self.headers.iter().map(|h| h.chars().count()).collect();
+
+        // Compute max widths from rows (strip ANSI for proper width calc)
+        for row in &self.rows {
+            for (i, cell) in row.iter().enumerate() {
+                if i < num_cols {
+                    let stripped = strip_ansi(cell);
+                    widths[i] = widths[i].max(stripped.chars().count());
+                }
+            }
+        }
+        if let Some(ref footer) = self.footer {
+            for (i, cell) in footer.iter().enumerate() {
+                if i < num_cols {
+                    let stripped = strip_ansi(cell);
+                    widths[i] = widths[i].max(stripped.chars().count());
+                }
+            }
+        }
+
+        // Top border: ┌─────┬─────┐
+        print!("┌");
+        for (i, w) in widths.iter().enumerate() {
+            print!("{}", "─".repeat(*w + 2));
+            if i < num_cols - 1 { print!("┬"); }
+        }
+        println!("┐");
+
+        // Header row
+        print!("│");
+        for (i, header) in self.headers.iter().enumerate() {
+            let padded = format!("{:width$}", header, width = widths[i]);
+            if let Some(style) = self.header_style {
+                print!(" {} │", style(&padded));
+            } else {
+                print!(" {} │", padded);
+            }
+        }
+        println!();
+
+        // Header separator: ├─────┼─────┤
+        print!("├");
+        for (i, w) in widths.iter().enumerate() {
+            print!("{}", "─".repeat(*w + 2));
+            if i < num_cols - 1 { print!("┼"); }
+        }
+        println!("┤");
+
+        // Data rows
+        for row in &self.rows {
+            print!("│");
+            for (i, cell) in row.iter().enumerate() {
+                if i < num_cols {
+                    let stripped = strip_ansi(cell);
+                    let pad = widths[i].saturating_sub(stripped.chars().count());
+                    print!(" {}{} │", cell, " ".repeat(pad));
+                }
+            }
+            println!();
+        }
+
+        // Footer separator if present
+        if let Some(ref footer) = self.footer {
+            print!("├");
+            for (i, w) in widths.iter().enumerate() {
+                print!("{}", "─".repeat(*w + 2));
+                if i < num_cols - 1 { print!("┼"); }
+            }
+            println!("┤");
+
+            print!("│");
+            for (i, cell) in footer.iter().enumerate() {
+                if i < num_cols {
+                    let stripped = strip_ansi(cell);
+                    let pad = widths[i].saturating_sub(stripped.chars().count());
+                    print!(" {}{} │", cell, " ".repeat(pad));
+                }
+            }
+            println!();
+        }
+
+        // Bottom border: └─────┴─────┘
+        print!("└");
+        for (i, w) in widths.iter().enumerate() {
+            print!("{}", "─".repeat(*w + 2));
+            if i < num_cols - 1 { print!("┴"); }
+        }
+        println!("┘");
+    }
+}
+
+fn strip_ansi(s: &str) -> String {
+    let mut result = String::new();
+    let mut in_escape = false;
+    for c in s.chars() {
+        if c == '\x1b' {
+            in_escape = true;
+        } else if in_escape {
+            if c == 'm' {
+                in_escape = false;
+            }
+        } else {
+            result.push(c);
+        }
+    }
+    result
 }
 
 fn extract_project_name(path: &Path) -> String {
