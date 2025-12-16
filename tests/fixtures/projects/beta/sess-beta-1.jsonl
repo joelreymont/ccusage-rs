@@ -1,0 +1,1 @@
+{"timestamp":"2024-12-01T23:00:00Z","sessionId":"sess-beta-1","message":{"usage":{"input_tokens":50,"output_tokens":20},"model":"claude-3-5-haiku-20241022"},"costUSD":0.05}

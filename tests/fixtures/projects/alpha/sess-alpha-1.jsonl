@@ -1,0 +1,2 @@
+{"timestamp":"2024-12-01T10:00:00Z","sessionId":"sess-alpha-1","message":{"usage":{"input_tokens":100,"output_tokens":50,"cache_creation_input_tokens":20,"cache_read_input_tokens":10},"model":"claude-3-5-sonnet-20241022"},"costUSD":0.15}
+{"timestamp":"2024-12-01T12:30:00Z","sessionId":"sess-alpha-1","message":{"usage":{"input_tokens":200,"output_tokens":100,"cache_read_input_tokens":5},"model":"claude-3-5-sonnet-20241022"},"costUSD":0.25}

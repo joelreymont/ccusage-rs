@@ -1,0 +1,1 @@
+{"timestamp":"2024-12-03T01:00:00Z","sessionId":"sess-beta-2","message":{"usage":{"input_tokens":300,"output_tokens":150,"cache_creation_input_tokens":30,"cache_read_input_tokens":15},"model":"claude-3-opus-20240229"},"costUSD":0.4}
