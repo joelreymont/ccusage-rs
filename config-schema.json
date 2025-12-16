@@ -1,0 +1,50 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ccusage-rs config",
+  "type": "object",
+  "properties": {
+    "defaults": { "$ref": "#/definitions/commandConfig" },
+    "commands": {
+      "type": "object",
+      "properties": {
+        "daily": { "$ref": "#/definitions/commandConfig" },
+        "weekly": { "$ref": "#/definitions/commandConfig" },
+        "monthly": { "$ref": "#/definitions/commandConfig" },
+        "sessions": { "$ref": "#/definitions/commandConfig" },
+        "blocks": { "$ref": "#/definitions/commandConfig" },
+        "statusline": { "$ref": "#/definitions/commandConfig" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false,
+  "definitions": {
+    "order": { "type": "string", "enum": ["asc", "desc"] },
+    "weekStart": { "type": "string", "enum": ["sunday", "monday"] },
+    "commandConfig": {
+      "type": "object",
+      "properties": {
+        "json": { "type": "boolean" },
+        "compact": { "type": "boolean" },
+        "breakdown": { "type": "boolean" },
+        "offline": { "type": "boolean" },
+        "cost_mode": { "type": "string", "enum": ["auto", "prefer-field", "calculate"] },
+        "timezone": { "type": "string" },
+        "locale": { "type": "string" },
+        "order": { "$ref": "#/definitions/order" },
+        "instances": { "type": "boolean" },
+        "since": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+        "until": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+        "project": { "type": "string" },
+        "start_of_week": { "$ref": "#/definitions/weekStart" },
+        "token_limit": { "type": "integer", "minimum": 0 },
+        "recent_days": { "type": "integer", "minimum": 0 },
+        "session_length_hours": { "type": "integer", "minimum": 1 },
+        "refresh_seconds": { "type": "integer", "minimum": 1 },
+        "live": { "type": "boolean" },
+        "tui": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    }
+  }
+}
