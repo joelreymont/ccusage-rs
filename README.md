@@ -1,5 +1,9 @@
 # ccusage-rs
 
+> ⚠️ **DEPRECATED**: This project has been superseded by [zzusage](https://github.com/joelreymont/zzusage), a Zig reimplementation that is **9x smaller** (466KB vs 4.3MB) and **3x faster** (0.6s vs 1.8s). Please use zzusage instead.
+
+---
+
 Daily usage with per-model breakdown:
 
 ![Daily usage](images/ccusage-daily.png)
